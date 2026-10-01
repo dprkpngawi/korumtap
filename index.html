@@ -263,7 +263,7 @@
     letter-spacing:.1px;
   }
   .field{margin-bottom:15px;}
-  input[type=text], textarea, select{
+  input[type=text], input[type=password], textarea, select{
     width:100%;
     padding:12px 13px;
     border:1.5px solid var(--border);
@@ -779,9 +779,7 @@
   <div id="viewAdmin" style="display:none;">
     <div id="adminGate" class="admin-gate card">
       <h2 style="border:none;justify-content:center;"><span class="ic">🔒</span>Masuk Rekap</h2>
-      <input type="text" id="adminEmail" placeholder="Email admin" autocomplete="username" inputmode="email" style="margin-bottom:8px">
-      <br>
-      <input type="password" id="adminPass" placeholder="Password" autocomplete="current-password">
+      <input type="password" id="adminPass" placeholder="Password admin" autocomplete="current-password">
       <br>
       <button onclick="checkAdmin()">Masuk</button>
       <div class="msg" id="adminMsg"></div>
@@ -897,6 +895,8 @@
 <script src="https://cdn.jsdelivr.net/npm/docx@8.5.0/build/index.umd.min.js" crossorigin="anonymous"></script>
 <script>
 // ============== KONFIGURASI ==============
+  // Email akun admin di Supabase Auth (bukan rahasia; yang rahasia hanya password-nya). Ganti sesuai akun Anda.
+  const ADMIN_EMAIL = "admin@contoh.go.id";
   const SUPABASE_URL = "https://mildlnlsefpoibwiccfy.supabase.co";
   const SUPABASE_ANON_KEY = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Im1pbGRsbmxzZWZwb2lid2ljY2Z5Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3OTA4MTgyMDksImV4cCI6MjEwNjM5NDIwOX0.xz1OLXOp2MpdLAuUsn_Dv3y7nqO10NZZfUUnBt0FOzw";
 
@@ -1579,13 +1579,13 @@ async function isAdminUser(){
 async function checkAdmin(){
   const amsg = document.getElementById('adminMsg');
   const fail = (t) => { amsg.textContent = t; amsg.className = 'msg err'; amsg.style.display = 'block'; };
-  const email = document.getElementById('adminEmail').value.trim();
+  const email = ADMIN_EMAIL;
   const pass = document.getElementById('adminPass').value;
   if(!sb) return fail('Koneksi database belum siap.');
-  if(!email || !pass) return fail('Email dan password wajib diisi.');
+  if(!pass) return fail('Password wajib diisi.');
   const { error } = await sb.auth.signInWithPassword({ email, password: pass });
   document.getElementById('adminPass').value = '';
-  if(error) return fail('Email atau password salah.');
+  if(error) return fail('Password salah.');
   if(!(await isAdminUser())){ await sb.auth.signOut(); return fail('Akun ini tidak memiliki akses admin.'); }
   amsg.style.display = 'none';
   showAdminContent();
