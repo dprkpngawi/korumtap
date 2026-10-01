@@ -1578,17 +1578,41 @@ async function isAdminUser(){
 
 async function checkAdmin(){
   const amsg = document.getElementById('adminMsg');
+  const btn = document.querySelector('#adminGate button');
   const fail = (t) => { amsg.textContent = t; amsg.className = 'msg err'; amsg.style.display = 'block'; };
-  const email = ADMIN_EMAIL;
   const pass = document.getElementById('adminPass').value;
-  if(!sb) return fail('Koneksi database belum siap.');
+  if(!sb) return fail('Koneksi database belum siap. Refresh halaman lalu coba lagi.');
+  if(!ADMIN_EMAIL || ADMIN_EMAIL === 'admin@contoh.go.id') return fail('ADMIN_EMAIL di dalam file HTML belum diganti dengan email akun admin Supabase.');
   if(!pass) return fail('Password wajib diisi.');
-  const { error } = await sb.auth.signInWithPassword({ email, password: pass });
-  document.getElementById('adminPass').value = '';
-  if(error) return fail('Password salah.');
-  if(!(await isAdminUser())){ await sb.auth.signOut(); return fail('Akun ini tidak memiliki akses admin.'); }
-  amsg.style.display = 'none';
-  showAdminContent();
+  btn.disabled = true;
+  try{
+    const { error } = await sb.auth.signInWithPassword({ email: ADMIN_EMAIL, password: pass });
+    document.getElementById('adminPass').value = '';
+    if(error){
+      console.error('Login error:', error);
+      const code = error.code || '';
+      if(code === 'invalid_credentials' || /invalid login/i.test(error.message)) return fail('Password salah, atau email di ADMIN_EMAIL tidak cocok dengan akun di Supabase.');
+      if(code === 'email_not_confirmed' || /not confirmed/i.test(error.message)) return fail('Akun belum dikonfirmasi. Di Supabase: Authentication > Users > klik akun > Confirm user.');
+      if(error.status === 429) return fail('Terlalu banyak percobaan. Tunggu beberapa menit.');
+      return fail('Login gagal: ' + error.message);
+    }
+    const { data: { session } } = await sb.auth.getSession();
+    if(!session) return fail('Sesi login tidak terbentuk. Coba lagi.');
+    const { data, error: rpcErr } = await sb.rpc('korumtap_is_admin');
+    if(rpcErr){
+      console.error('RPC error:', rpcErr);
+      await sb.auth.signOut();
+      return fail('Fungsi korumtap_is_admin belum ada. Jalankan security.sql di Supabase SQL Editor.');
+    }
+    if(data !== true){
+      await sb.auth.signOut();
+      return fail('Login berhasil, tetapi akun ini belum didaftarkan sebagai admin. Jalankan perintah INSERT ke korumtap_admins (lihat petunjuk).');
+    }
+    amsg.style.display = 'none';
+    showAdminContent();
+  } finally {
+    btn.disabled = false;
+  }
 }
 
 async function logoutAdmin(){
