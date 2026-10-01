@@ -3,97 +3,12 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
+<meta http-equiv="Content-Security-Policy" content="default-src 'none'; script-src 'self' 'unsafe-inline' https://cdn.jsdelivr.net; style-src 'self' 'unsafe-inline' https://fonts.googleapis.com; font-src https://fonts.gstatic.com; img-src 'self' data:; connect-src https://mildlnlsefpoibwiccfy.supabase.co wss://mildlnlsefpoibwiccfy.supabase.co; base-uri 'none'; form-action 'none'">
+<meta name="referrer" content="no-referrer">
 <title>Koordinasi Perumahan Tanpa Pengembang (KORUMTAP)</title>
 <link rel="icon" type="image/svg+xml" href="logo-ngawi.svg">
 
-<!--
-=====================================================================
- SETUP SUPABASE (lakukan sekali sebelum dipakai)
-=====================================================================
-1. Buat project Supabase (atau pakai yang sudah ada), buka SQL Editor, lalu
-   jalankan seluruh blok SQL di bawah ini.
-
-  -- Laporan koordinasi (diisi petugas lewat form)
-  create table korumtap_laporan (
-    id uuid primary key default gen_random_uuid(),
-    nama text not null,
-    jabatan text,
-    nip text,
-    unit_kerja text,
-    nama_perumahan text not null,
-    alamat text,
-    status_pengembang text,
-    perwakilan_warga text,
-    kontak_perwakilan text,
-    luas_lahan text,
-    jumlah_unit text,
-    tanggal_koordinasi date,
-    pihak_hadir text,
-    kondisi_psu jsonb not null default '[]',
-    permasalahan text,
-    hasil_koordinasi text,
-    kesimpulan text not null,
-    tindak_lanjut text,
-    signature_data text not null,
-    created_at timestamptz not null default now()
-  );
-
-  -- Daftar perumahan tanpa pengembang (dikelola admin)
-  create table korumtap_perumahan (
-    id uuid primary key default gen_random_uuid(),
-    nama_perumahan text not null,
-    alamat text,
-    status_pengembang text,
-    perwakilan_warga text,
-    kontak_perwakilan text,
-    luas_lahan text,
-    jumlah_unit text,
-    is_active boolean not null default false,
-    created_at timestamptz not null default now()
-  );
-
-  -- Daftar Tim Koordinasi (dikelola admin)
-  create table korumtap_petugas (
-    id uuid primary key default gen_random_uuid(),
-    nama text not null,
-    jabatan text,
-    nip text,
-    unit_kerja text,
-    created_at timestamptz not null default now()
-  );
-
-  alter table korumtap_laporan enable row level security;
-  alter table korumtap_perumahan enable row level security;
-  alter table korumtap_petugas enable row level security;
-
-  create policy "laporan select" on korumtap_laporan for select using (true);
-  create policy "laporan insert" on korumtap_laporan for insert with check (true);
-  create policy "laporan delete" on korumtap_laporan for delete using (true);
-
-  create policy "perumahan select" on korumtap_perumahan for select using (true);
-  create policy "perumahan insert" on korumtap_perumahan for insert with check (true);
-  create policy "perumahan update" on korumtap_perumahan for update using (true) with check (true);
-  create policy "perumahan delete" on korumtap_perumahan for delete using (true);
-
-  create policy "petugas select" on korumtap_petugas for select using (true);
-  create policy "petugas insert" on korumtap_petugas for insert with check (true);
-  create policy "petugas update" on korumtap_petugas for update using (true) with check (true);
-  create policy "petugas delete" on korumtap_petugas for delete using (true);
-
-  -- Sinkron realtime lintas perangkat (kalau error "already member of
-  -- publication", artinya sudah aktif, abaikan saja)
-  alter publication supabase_realtime add table korumtap_petugas;
-  alter publication supabase_realtime add table korumtap_perumahan;
-
-2. Isi SUPABASE_URL dan SUPABASE_ANON_KEY di bagian script (Project Settings,
-   menu API).
-3. Ganti ADMIN_PASSCODE di bagian script.
-
-CATATAN KEAMANAN: ADMIN_PASSCODE hanya pengaman ringan di sisi browser, dan
-policy di atas membuka baca/tulis/hapus untuk siapa saja yang memegang anon
-key. Untuk data yang sensitif, ganti dengan Supabase Auth dan policy per user.
-=====================================================================
--->
+<!-- Setup database & keamanan: jalankan security.sql di Supabase SQL Editor. -->
 
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
@@ -854,6 +769,7 @@ key. Untuk data yang sensitif, ganti dengan Supabase Auth dan policy per user.
         </div>
       </div>
 
+      <input type="text" id="f_website" name="website" tabindex="-1" autocomplete="off" aria-hidden="true" style="position:absolute;left:-9999px;width:1px;height:1px;opacity:0">
       <button type="submit" class="submit-btn" id="submitBtn">Kirim Laporan Koordinasi</button>
       <div class="msg" id="formMsg"></div>
     </form>
@@ -863,7 +779,9 @@ key. Untuk data yang sensitif, ganti dengan Supabase Auth dan policy per user.
   <div id="viewAdmin" style="display:none;">
     <div id="adminGate" class="admin-gate card">
       <h2 style="border:none;justify-content:center;"><span class="ic">🔒</span>Masuk Rekap</h2>
-      <input type="text" id="adminPass" placeholder="Passcode admin">
+      <input type="text" id="adminEmail" placeholder="Email admin" autocomplete="username" inputmode="email" style="margin-bottom:8px">
+      <br>
+      <input type="password" id="adminPass" placeholder="Password" autocomplete="current-password">
       <br>
       <button onclick="checkAdmin()">Masuk</button>
       <div class="msg" id="adminMsg"></div>
@@ -974,13 +892,13 @@ key. Untuk data yang sensitif, ganti dengan Supabase Auth dan policy per user.
   Dinas Perumahan Rakyat dan Kawasan Permukiman &middot; Pemerintah Kabupaten Ngawi
 </div>
 
-<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
-<script src="https://cdn.jsdelivr.net/npm/docx@8.5.0/build/index.umd.min.js"></script>
+<!-- Tambahkan integrity="sha384-..." (SRI) dari jsdelivr.com setelah versi dikunci -->
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.45.4" crossorigin="anonymous"></script>
+<script src="https://cdn.jsdelivr.net/npm/docx@8.5.0/build/index.umd.min.js" crossorigin="anonymous"></script>
 <script>
 // ============== KONFIGURASI ==============
   const SUPABASE_URL = "https://mildlnlsefpoibwiccfy.supabase.co";
   const SUPABASE_ANON_KEY = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Im1pbGRsbmxzZWZwb2lid2ljY2Z5Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3OTA4MTgyMDksImV4cCI6MjEwNjM5NDIwOX0.xz1OLXOp2MpdLAuUsn_Dv3y7nqO10NZZfUUnBt0FOzw";
-  const ADMIN_PASSCODE = "passcode-pilihanmu";
 
 // Komponen PSU yang ditinjau. Ubah/tambah di sini kalau perlu.
 const PSU_ITEMS = [
@@ -1073,7 +991,7 @@ function buildPsuRows(){
           <option value="">-- Kondisi --</option>
           ${PSU_KONDISI.map(k => `<option value="${k}">${k}</option>`).join('')}
         </select>
-        <input type="text" id="psu_ket_${i}" placeholder="Keterangan (opsional)">
+        <input type="text" id="psu_ket_${i}" placeholder="Keterangan (opsional)" maxlength="300">
       </div>
     </div>
   `).join('');
@@ -1263,8 +1181,8 @@ function renderPetugasAdminList(){
           <small>${escapeHtml(t.jabatan || '-')}${t.unit_kerja ? ' — ' + escapeHtml(t.unit_kerja) : ''}${t.nip ? ' — NIP ' + escapeHtml(t.nip) : ''}</small>
         </div>
         <div style="display:flex;gap:6px;flex:none;">
-          <button type="button" onclick="editPetugas('${t.id}')">Edit</button>
-          <button type="button" class="rm-btn" onclick="deletePetugas('${t.id}', '${escapeHtml(t.nama).replace(/'/g, "\\'")}')">&times;</button>
+          <button type="button" data-act="edit-petugas" data-id="${escapeHtml(t.id)}">Edit</button>
+          <button type="button" class="rm-btn" data-act="del-petugas" data-id="${escapeHtml(t.id)}">&times;</button>
         </div>
       </div>
     </div>
@@ -1462,7 +1380,7 @@ function renderPerumahanAdminList(){
     <div class="rekap-item"${String(p.id) === String(editingPerumahanId) ? ' style="border-color:var(--gold);"' : ''}>
       <div class="top">
         <label style="display:flex;gap:10px;align-items:flex-start;cursor:pointer;flex:1;">
-          <input type="checkbox" style="margin-top:3px;width:16px;height:16px;flex:none;" ${p.is_active ? 'checked' : ''} onchange="toggleActivePerumahan('${p.id}', this.checked)">
+          <input type="checkbox" style="margin-top:3px;width:16px;height:16px;flex:none;" ${p.is_active ? 'checked' : ''} data-act="toggle-perumahan" data-id="${escapeHtml(p.id)}">
           <span>
             <strong>${escapeHtml(p.nama_perumahan)}</strong>${p.is_active ? ' <span class="badge setuju">Sedang Dikoordinasikan</span>' : ''}<br>
             <small>${p.alamat ? escapeHtml(p.alamat) : '-'}</small><br>
@@ -1472,8 +1390,8 @@ function renderPerumahanAdminList(){
           </span>
         </label>
         <div style="display:flex;gap:6px;flex:none;">
-          <button type="button" onclick="editPerumahan('${p.id}')">Edit</button>
-          <button type="button" class="rm-btn" onclick="deletePerumahan('${p.id}', '${escapeHtml(p.nama_perumahan).replace(/'/g, "\\'")}')">&times;</button>
+          <button type="button" data-act="edit-perumahan" data-id="${escapeHtml(p.id)}">Edit</button>
+          <button type="button" class="rm-btn" data-act="del-perumahan" data-id="${escapeHtml(p.id)}">&times;</button>
         </div>
       </div>
     </div>
@@ -1585,6 +1503,14 @@ document.getElementById('koordForm').addEventListener('submit', async (e) => {
   if(!kesimpulanEl) return showErr('Pilih salah satu rekomendasi tindak lanjut.');
   if(!hasSig) return showErr('Tanda tangan belum diisi.');
   if(!sb) return showErr('Koneksi database belum siap. Refresh halaman lalu coba lagi.');
+  if(document.getElementById('f_website').value){ // honeypot: bot
+    msg.textContent = 'Laporan koordinasi berhasil dikirim. Terima kasih.'; msg.className = 'msg ok'; msg.style.display = 'block';
+    return;
+  }
+  if(!/^[0-9 ]{0,30}$/.test(document.getElementById('f_nip').value.trim())) return showErr('NIP hanya boleh berisi angka.');
+  let lastSend = 0;
+  try{ lastSend = Number(sessionStorage.getItem('korumtap_last_submit') || 0); }catch(_){}
+  if(Date.now() - lastSend < 30000) return showErr('Tunggu beberapa detik sebelum mengirim lagi.');
 
   const payload = {
     nama,
@@ -1608,13 +1534,14 @@ document.getElementById('koordForm').addEventListener('submit', async (e) => {
     signature_data: canvas.toDataURL('image/png')
   };
 
+  try{ sessionStorage.setItem('korumtap_last_submit', String(Date.now())); }catch(_){}
   btn.disabled = true; btn.textContent = 'Mengirim...';
   const { error } = await sb.from('korumtap_laporan').insert(payload);
   btn.disabled = false; btn.textContent = 'Kirim Laporan Koordinasi';
 
   if(error){
     console.error(error);
-    showErr('Gagal mengirim: ' + error.message);
+    showErr('Gagal mengirim laporan. Periksa isian lalu coba lagi.');
   } else {
     msg.textContent = 'Laporan koordinasi berhasil dikirim. Terima kasih.';
     msg.className = 'msg ok'; msg.style.display = 'block';
@@ -1629,7 +1556,6 @@ document.getElementById('koordForm').addEventListener('submit', async (e) => {
 });
 
 /* ---------- Admin ---------- */
-const ADMIN_SESSION_KEY = 'korumtap_admin_logged_in';
 let adminOk = false;
 let lastRekapData = [];
 
@@ -1642,32 +1568,48 @@ function showAdminContent(){
   loadRekap();
 }
 
-function checkAdmin(){
-  const val = document.getElementById('adminPass').value;
-  const amsg = document.getElementById('adminMsg');
-  if(val === ADMIN_PASSCODE){
-    try{ localStorage.setItem(ADMIN_SESSION_KEY, '1'); }catch(e){ console.error(e); }
-    showAdminContent();
-  } else {
-    amsg.textContent = 'Passcode salah.';
-    amsg.className = 'msg err'; amsg.style.display = 'block';
-  }
+async function isAdminUser(){
+  if(!sb) return false;
+  const { data: { session } } = await sb.auth.getSession();
+  if(!session) return false;
+  const { data, error } = await sb.rpc('korumtap_is_admin');
+  return !error && data === true;
 }
 
-function logoutAdmin(){
+async function checkAdmin(){
+  const amsg = document.getElementById('adminMsg');
+  const fail = (t) => { amsg.textContent = t; amsg.className = 'msg err'; amsg.style.display = 'block'; };
+  const email = document.getElementById('adminEmail').value.trim();
+  const pass = document.getElementById('adminPass').value;
+  if(!sb) return fail('Koneksi database belum siap.');
+  if(!email || !pass) return fail('Email dan password wajib diisi.');
+  const { error } = await sb.auth.signInWithPassword({ email, password: pass });
+  document.getElementById('adminPass').value = '';
+  if(error) return fail('Email atau password salah.');
+  if(!(await isAdminUser())){ await sb.auth.signOut(); return fail('Akun ini tidak memiliki akses admin.'); }
+  amsg.style.display = 'none';
+  showAdminContent();
+}
+
+async function logoutAdmin(){
   adminOk = false;
-  try{ localStorage.removeItem(ADMIN_SESSION_KEY); }catch(e){ console.error(e); }
+  lastRekapData = [];
+  if(sb) await sb.auth.signOut();
+  document.getElementById('rekapList').innerHTML = '';
   document.getElementById('adminPass').value = '';
   document.getElementById('adminMsg').style.display = 'none';
   document.getElementById('adminContent').style.display = 'none';
   document.getElementById('adminGate').style.display = 'block';
 }
 
-(function restoreAdminSession(){
-  try{
-    if(localStorage.getItem(ADMIN_SESSION_KEY) === '1') showAdminContent();
-  }catch(e){ console.error(e); }
+(async function restoreAdminSession(){
+  if(await isAdminUser()) showAdminContent();
 })();
+if(sb) sb.auth.onAuthStateChange((ev) => { if(ev === 'SIGNED_OUT' && adminOk) logoutAdmin(); });
+
+function safeSig(s){
+  return (typeof s === 'string' && s.length < 400000 && /^data:image\/png;base64,[A-Za-z0-9+\/]+=*$/.test(s)) ? s : '';
+}
 
 function escapeHtml(str){
   if(!str) return '';
@@ -1730,7 +1672,7 @@ async function loadRekap(){
         ${row.permasalahan ? `<p class="rekap-uraian"><b>Permasalahan:</b> ${escapeHtml(row.permasalahan)}</p>` : ''}
         ${row.hasil_koordinasi ? `<p class="rekap-uraian"><b>Hasil koordinasi:</b> ${escapeHtml(row.hasil_koordinasi)}</p>` : ''}
         ${row.tindak_lanjut ? `<div class="rekap-meta">Tindak lanjut: ${escapeHtml(row.tindak_lanjut)}</div>` : ''}
-        ${row.signature_data ? `<img src="${row.signature_data}" alt="tanda tangan">` : ''}
+        ${safeSig(row.signature_data) ? `<img src="${safeSig(row.signature_data)}" alt="tanda tangan">` : ''}
         <div class="rekap-actions">
           <button class="word-btn" onclick="exportWordRow(${idx})">Export Word</button>
           <button class="del-btn" onclick="deleteRow(${idx})">Hapus</button>
@@ -1986,7 +1928,7 @@ async function exportWordRow(idx){
     children.push(new Paragraph({ indent: { left: 5040 }, children: [ run(`Ngawi, ${tanggalPanjangID(tanggalDoc)}`) ] }));
     children.push(new Paragraph({ indent: { left: 5040 }, spacing: { after: 120 }, children: [ run('Yang Membuat,') ] }));
 
-    if(row.signature_data){
+    if(safeSig(row.signature_data)){
       try{
         children.push(new Paragraph({
           indent: { left: 5040 }, spacing: { after: 60 },
@@ -2042,7 +1984,9 @@ async function exportWordRow(idx){
 /* ---------- Export CSV ---------- */
 function csvEscape(val){
   if(val === null || val === undefined) return '';
-  return `"${String(val).replace(/"/g, '""')}"`;
+  let t = String(val);
+  if(/^[=+\-@\t\r]/.test(t)) t = "'" + t; // cegah CSV/formula injection
+  return `"${t.replace(/"/g, '""')}"`;
 }
 
 function exportCsv(){
@@ -2083,6 +2027,27 @@ function exportCsv(){
   document.body.removeChild(a);
   URL.revokeObjectURL(url);
 }
+
+/* ---------- Delegasi event (pengganti onclick inline berisi data) ---------- */
+document.addEventListener('click', (e) => {
+  const b = e.target.closest('[data-act]');
+  if(!b) return;
+  const id = b.dataset.id;
+  if(b.dataset.act === 'edit-petugas') editPetugas(id);
+  else if(b.dataset.act === 'del-petugas'){ const t = PETUGAS_LIST.find(x => String(x.id) === id); deletePetugas(id, t ? t.nama : ''); }
+  else if(b.dataset.act === 'edit-perumahan') editPerumahan(id);
+  else if(b.dataset.act === 'del-perumahan'){ const p = PERUMAHAN_LIST.find(x => String(x.id) === id); deletePerumahan(id, p ? p.nama_perumahan : ''); }
+});
+document.addEventListener('change', (e) => {
+  const c = e.target.closest('[data-act="toggle-perumahan"]');
+  if(c) toggleActivePerumahan(c.dataset.id, c.checked);
+});
+document.getElementById('adminPass').addEventListener('keydown', (e) => { if(e.key === 'Enter') checkAdmin(); });
+
+/* ---------- Batas panjang input ---------- */
+const MAXLEN = { f_nama:150, f_jabatan:150, f_nip:30, f_unit_kerja:150, f_pihak_hadir:500, f_permasalahan:3000, f_hasil:3000, f_tindak_lanjut:2000,
+  pt_nama:150, pt_jabatan:150, pt_nip:30, pt_unit_kerja:150, ph_nama_perumahan:200, ph_alamat:500, ph_perwakilan:150, ph_kontak:30, ph_luas_lahan:50, ph_jumlah_unit:50 };
+Object.entries(MAXLEN).forEach(([id, n]) => { const el = document.getElementById(id); if(el) el.maxLength = n; });
 
 /* ---------- Inisialisasi ---------- */
 buildPsuRows();
