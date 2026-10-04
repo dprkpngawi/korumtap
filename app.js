@@ -167,6 +167,7 @@ function applyTimSelection(){
     if(sel.value === 'lain'){
       document.getElementById('f_nama').value = '';
       document.getElementById('f_jabatan').value = '';
+      document.getElementById('f_pangkat').value = '';
       document.getElementById('f_nip').value = '';
       document.getElementById('f_unit_kerja').value = '';
       document.getElementById('f_nama').focus();
@@ -178,6 +179,7 @@ function applyTimSelection(){
   if(!t) return;
   document.getElementById('f_nama').value = t.nama;
   document.getElementById('f_jabatan').value = t.jabatan || '';
+  document.getElementById('f_pangkat').value = t.pangkat || '';
   document.getElementById('f_nip').value = t.nip || '';
   document.getElementById('f_unit_kerja').value = t.unit_kerja || '';
   refreshFieldColors(document.getElementById('koordForm'));
@@ -212,6 +214,7 @@ async function savePetugas(){
   const payload = {
     nama,
     jabatan: document.getElementById('pt_jabatan').value.trim(),
+    pangkat: document.getElementById('pt_pangkat').value.trim(),
     nip: document.getElementById('pt_nip').value.trim(),
     unit_kerja: document.getElementById('pt_unit_kerja').value.trim()
   };
@@ -246,6 +249,7 @@ function editPetugas(id){
   editingPetugasId = t.id;
   document.getElementById('pt_nama').value = t.nama || '';
   document.getElementById('pt_jabatan').value = t.jabatan || '';
+  document.getElementById('pt_pangkat').value = t.pangkat || '';
   document.getElementById('pt_nip').value = t.nip || '';
   document.getElementById('pt_unit_kerja').value = t.unit_kerja || '';
   document.getElementById('ptSaveBtn').textContent = 'Simpan Perubahan';
@@ -261,6 +265,7 @@ function cancelEditPetugas(){
   editingPetugasId = null;
   document.getElementById('pt_nama').value = '';
   document.getElementById('pt_jabatan').value = '';
+  document.getElementById('pt_pangkat').value = '';
   document.getElementById('pt_nip').value = '';
   document.getElementById('pt_unit_kerja').value = '';
   document.getElementById('ptSaveBtn').textContent = '+ Tambah Petugas';
@@ -295,7 +300,7 @@ function renderPetugasAdminList(){
       <div class="top">
         <div>
           <strong>${escapeHtml(t.nama)}</strong><br>
-          <small>${escapeHtml(t.jabatan || '-')}${t.unit_kerja ? ' — ' + escapeHtml(t.unit_kerja) : ''}${t.nip ? ' — NIP ' + escapeHtml(t.nip) : ''}</small>
+          <small>${escapeHtml(t.jabatan || '-')}${t.pangkat ? ' — ' + escapeHtml(t.pangkat) : ''}${t.unit_kerja ? ' — ' + escapeHtml(t.unit_kerja) : ''}${t.nip ? ' — NIP ' + escapeHtml(t.nip) : ''}</small>
         </div>
         <div style="display:flex;gap:6px;flex:none;">
           <button type="button" data-act="edit-petugas" data-id="${escapeHtml(t.id)}">Edit</button>
@@ -659,6 +664,7 @@ document.getElementById('koordForm').addEventListener('submit', async (e) => {
   const payload = {
     nama,
     jabatan: document.getElementById('f_jabatan').value.trim(),
+    pangkat: document.getElementById('f_pangkat').value.trim(),
     nip: document.getElementById('f_nip').value.trim(),
     unit_kerja: document.getElementById('f_unit_kerja').value.trim(),
     nama_perumahan: namaPerumahan,
@@ -870,7 +876,7 @@ function renderRekap(){
           </div>
           <span class="badge ${cls}">${escapeHtml(row.kesimpulan)}</span>
         </div>
-        <div class="rekap-meta"><b>${escapeHtml(row.nama)}</b>${row.jabatan ? ' — ' + escapeHtml(row.jabatan) : ''}${row.nip ? ' — NIP ' + escapeHtml(row.nip) : ''}</div>
+        <div class="rekap-meta"><b>${escapeHtml(row.nama)}</b>${row.jabatan ? ' — ' + escapeHtml(row.jabatan) : ''}${row.pangkat ? ' — ' + escapeHtml(row.pangkat) : ''}${row.nip ? ' — NIP ' + escapeHtml(row.nip) : ''}</div>
         ${row.unit_kerja ? `<div class="rekap-meta">${escapeHtml(row.unit_kerja)}</div>` : ''}
         ${row.alamat ? `<div class="rekap-meta">Alamat: ${escapeHtml(row.alamat)}</div>` : ''}
         ${row.status_pengembang ? `<div class="rekap-meta">Status pengembang: ${escapeHtml(row.status_pengembang)}</div>` : ''}
@@ -1157,9 +1163,13 @@ async function exportWordRow(idx, btn){
     children.push(bodyPara(`Berdasarkan hasil koordinasi, penanganan Perumahan ${row.nama_perumahan || '-'} yang tidak memiliki pengembang ${frasa}.`));
 
     // ---- tanda tangan ----
-    children.push(new Paragraph({ spacing: { before: 420 }, children: [] }));
-    children.push(new Paragraph({ indent: { left: 5040 }, children: [ run(`Ngawi, ${tanggalPanjangID(tanggalDoc)}`) ] }));
-    children.push(new Paragraph({ indent: { left: 5040 }, spacing: { after: 120 }, children: [ run('Yang Membuat,') ] }));
+    // Susunan: Ngawi, tanggal / JABATAN / UNIT KERJA / (tanda tangan) / NAMA / Pangkat / NIP.
+    const upperID = (s) => String(s || '').replace(/\bKab\.\s*/gi, 'Kabupaten ').replace(/\s+/g, ' ').trim().toUpperCase();
+    const sigInd = { left: 5040 };
+    children.push(new Paragraph({ spacing: { before: 420 }, keepNext: true, children: [] }));
+    children.push(new Paragraph({ indent: sigInd, keepNext: true, children: [ run(`Ngawi, ${tanggalPanjangID(tanggalDoc)}`) ] }));
+    if(row.jabatan) children.push(new Paragraph({ indent: sigInd, keepNext: true, children: [ run(upperID(row.jabatan)) ] }));
+    if(row.unit_kerja) children.push(new Paragraph({ indent: sigInd, keepNext: true, children: [ run(upperID(row.unit_kerja)) ] }));
 
     if(safeSig(row.signature_data)){
       try{
@@ -1167,23 +1177,23 @@ async function exportWordRow(idx, btn){
         const dim = pngSize(sigBytes);
         const sigW = 170, sigH = dim ? Math.min(110, Math.max(30, Math.round(sigW * dim.h / dim.w))) : 80;
         children.push(new Paragraph({
-          indent: { left: 5040 }, spacing: { after: 60 },
+          indent: sigInd, spacing: { before: 120, after: 60 }, keepNext: true,
           children: [ new ImageRun({ data: sigBytes, type: 'png', transformation: { width: sigW, height: sigH } }) ]
         }));
       }catch(imgErr){
         console.error('Gagal menyisipkan gambar tanda tangan:', imgErr);
-        children.push(new Paragraph({ indent: { left: 5040 }, spacing: { before: 400, after: 60 }, children: [] }));
+        children.push(new Paragraph({ indent: sigInd, spacing: { before: 400, after: 60 }, keepNext: true, children: [] }));
       }
     } else {
-      children.push(new Paragraph({ indent: { left: 5040 }, spacing: { before: 400, after: 60 }, children: [] }));
+      children.push(new Paragraph({ indent: sigInd, spacing: { before: 400, after: 60 }, keepNext: true, children: [] }));
     }
 
     children.push(new Paragraph({
-      indent: { left: 5040 },
-      children: [ run(`(${row.nama || 'NAMA'})`, { bold: true, underline: { type: UnderlineType.SINGLE } }) ]
+      indent: sigInd, keepNext: true,
+      children: [ run(row.nama || 'NAMA', { bold: true, underline: { type: UnderlineType.SINGLE } }) ]
     }));
-    if(row.jabatan) children.push(new Paragraph({ indent: { left: 5040 }, children: [ run(row.jabatan) ] }));
-    if(row.nip) children.push(new Paragraph({ indent: { left: 5040 }, children: [ run(`NIP. ${row.nip}`) ] }));
+    if(row.pangkat) children.push(new Paragraph({ indent: sigInd, keepNext: true, children: [ run(row.pangkat) ] }));
+    if(row.nip) children.push(new Paragraph({ indent: sigInd, children: [ run(`NIP. ${row.nip}`) ] }));
 
     const doc = new Document({
       styles: { default: { document: { run: { font: FONT, size: SIZE } } } },
@@ -1225,7 +1235,7 @@ function csvEscape(val){
   return `"${t.replace(/"/g, '""')}"`;
 }
 
-const CSV_COLS = 'id,tanggal_koordinasi,nama_perumahan,alamat,status_pengembang,perwakilan_warga,kontak_perwakilan,luas_lahan,jumlah_unit,pihak_hadir,nama,jabatan,nip,unit_kerja,kondisi_psu,permasalahan,hasil_koordinasi,kesimpulan,tindak_lanjut,created_at';
+const CSV_COLS = 'id,tanggal_koordinasi,nama_perumahan,alamat,status_pengembang,perwakilan_warga,kontak_perwakilan,luas_lahan,jumlah_unit,pihak_hadir,nama,jabatan,pangkat,nip,unit_kerja,kondisi_psu,permasalahan,hasil_koordinasi,kesimpulan,tindak_lanjut,created_at';
 
 async function exportCsv(btn){
   if(!sb) return;
@@ -1252,7 +1262,7 @@ async function exportCsv(btn){
     alert('Belum ada data untuk di-export.');
     return;
   }
-  const headers = ['Tanggal Koordinasi','Nama Perumahan','Alamat','Status Pengembang','Perwakilan Warga','Kontak Perwakilan','Luas Lahan','Jumlah Unit','Pihak Hadir','Nama Petugas','Jabatan','NIP','Unit Kerja','Kondisi PSU','Permasalahan','Hasil Koordinasi','Rekomendasi','Rincian Tindak Lanjut','Dikirim Pada'];
+  const headers = ['Tanggal Koordinasi','Nama Perumahan','Alamat','Status Pengembang','Perwakilan Warga','Kontak Perwakilan','Luas Lahan','Jumlah Unit','Pihak Hadir','Nama Petugas','Jabatan','Pangkat/Golongan','NIP','Unit Kerja','Kondisi PSU','Permasalahan','Hasil Koordinasi','Rekomendasi','Rincian Tindak Lanjut','Dikirim Pada'];
   const rows = all.map(row => [
     row.tanggal_koordinasi || '',
     row.nama_perumahan,
@@ -1265,6 +1275,7 @@ async function exportCsv(btn){
     row.pihak_hadir,
     row.nama,
     row.jabatan,
+    row.pangkat,
     row.nip,
     row.unit_kerja,
     (Array.isArray(row.kondisi_psu) ? row.kondisi_psu : []).map(p => `${p.item}: ${p.kondisi || '-'}${p.keterangan ? ' (' + p.keterangan + ')' : ''}`).join(' | '),
@@ -1322,8 +1333,8 @@ document.getElementById('f_perumahan_select').addEventListener('change', applyPe
 document.getElementById('adminPass').addEventListener('keydown', (e) => { if(e.key === 'Enter') checkAdmin(); });
 
 /* ---------- Batas panjang input ---------- */
-const MAXLEN = { f_nama:150, f_jabatan:150, f_nip:30, f_unit_kerja:150, f_pihak_hadir:500, f_permasalahan:3000, f_hasil:3000, f_tindak_lanjut:2000,
-  pt_nama:150, pt_jabatan:150, pt_nip:30, pt_unit_kerja:150, ph_nama_perumahan:200, ph_alamat:500, ph_perwakilan:150, ph_kontak:30, ph_luas_lahan:50, ph_jumlah_unit:50 };
+const MAXLEN = { f_nama:150, f_jabatan:200, f_pangkat:100, f_nip:30, f_unit_kerja:150, f_pihak_hadir:500, f_permasalahan:3000, f_hasil:3000, f_tindak_lanjut:2000,
+  pt_nama:150, pt_jabatan:200, pt_pangkat:100, pt_nip:30, pt_unit_kerja:150, ph_nama_perumahan:200, ph_alamat:500, ph_perwakilan:150, ph_kontak:30, ph_luas_lahan:50, ph_jumlah_unit:50 };
 Object.entries(MAXLEN).forEach(([id, n]) => { const el = document.getElementById(id); if(el) el.maxLength = n; });
 
 /* ---------- Inisialisasi ---------- */
